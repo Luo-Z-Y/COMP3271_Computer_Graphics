@@ -31,9 +31,21 @@ void main() {
     // - max(float x, float y): returns the maximum value between x and y
     // - reflect(vec3 v, vec3 n): returns the reflection direction of the incident vector v and the normal n
 
-    // ambient =
-    // diffuse =
-    // specular =
+    vec3 N = normalize(Normal);
+    vec3 L = normalize(lightPos - FragPos);
+    
+    float lambertian = max(dot(N, L), 0.0);
+    if (lambertian > 0.0)
+    {
+        vec3 R = reflect(-L, N);
+        vec3 V = normalize(viewPos - FragPos);
+        float specAngle = max(dot(R, V), 0.0);
+        specular = pow(specAngle, shininess);
+    }
+    
+    ambient = ambientStrength * ambientLightStrength;
+    diffuse = diffuseStrength * lambertian * lightStrength;
+    specular = specularStrength * specular * lightStrength;
 
     vec3 result = (ambient + diffuse + specular) * objectColor;
     FragColor = vec4(result, 1.0);
