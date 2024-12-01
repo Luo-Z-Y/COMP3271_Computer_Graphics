@@ -1,6 +1,5 @@
 #include "Hittable.h"
 
-
 // Sphere
 bool Sphere::Hit(const Ray &ray, HitRecord *hit_record) const {
     // TODO 1: Implement the intersection test between a ray and a sphere.
@@ -9,15 +8,56 @@ bool Sphere::Hit(const Ray &ray, HitRecord *hit_record) const {
     // o_: center of sphere
     // r_: radius
     // material_: data structure storing the shading parameters
-    // You should also initialize the hit_record with the intersection information.
+    // You should also initialise the hit_record with the intersection information.
     // hit_record->position: the intersection position
     // hit_record->normal: the normal vector at the intersection position
     // hit_record->distance: the distance from the ray's origin to the intersection position
     // hit_record->in_direction: the direction of the shoot in ray
     // hit_record->reflection: the direction of the reflected ray
     // hit_record->material: the material of the sphere
+    
+    // Ray equation: P(t) = ray.origin + t * ray.direction
+    // Sphere equation: ||P - o_||^2 = r_^2
+    // Substituting the ray equation into the sphere equation:
+    // ||(ray.origin + t * ray.direction) - o_||^2 = r_^2
+    // Expands to: t^2 * (ray.direction . ray.direction) + 2t * (ray.direction . (ray.origin - o_)) +
+    //             ((ray.origin - o_) . (ray.origin - o_)) - r_^2 = 0
+    
+    // Vector from the ray origin to the sphere's center
+    Vec oc = ray.o - o_;
 
-    hit_record->material = material_;
+    // Coefficients of the quadratic equation
+    float a = glm::dot(ray.d, ray.d);
+    float b = 2.0f * glm::dot(oc, ray.d);
+    float c = glm::dot(oc, oc) - r_ * r_;
+
+    // Discriminant
+    float discriminant = b * b - 4 * a * c;
+
+    // No intersection if discriminant is negative
+    if (discriminant < 0) {
+      return false;
+    }
+
+    // Find the nearest valid intersection
+    float sqrt_discriminant = sqrt(discriminant);
+    float t1 = (-b - sqrt_discriminant) / (2.0f * a); // Closest point
+    float t2 = (-b + sqrt_discriminant) / (2.0f * a); // Farther point
+
+    // Determine which t to use (nearest positive t)
+    float t = (t1 > 0) ? t1 : t2;
+    if (t <= 0) {
+      return false; // No valid intersection
+    }
+
+    // Fill the hit record
+    hit_record->distance = t;
+    hit_record->position = ray.At(t); // Intersection position
+    hit_record->normal = glm::normalize(hit_record->position - o_); // Surface normal
+    hit_record->in_direction = glm::normalize(ray.d); // Direction of the incoming ray
+    hit_record->reflection = glm::normalize(ray.d - 2.0f * glm::dot(ray.d, hit_record->normal) * hit_record->normal); // Reflected direction
+    hit_record->material = material_; // Material of the sphere
+
     return true;
 }
 
@@ -74,6 +114,62 @@ bool Triangle::Hit(const Ray &ray, HitRecord *hit_record) const {
     // glm::cross
     // glm::dot
     // glm::length
+    
+    // Edge vectors of the triangle
+    Vec edge1 = b_ - a_;
+    Vec edge2 = c_ - a_;
+
+    // Compute the determinant
+    Vec h = glm::cross(ray.d, edge2);
+    float det = glm::dot(edge1, h);
+
+    // If the determinant is near zero, the ray lies in the plane of the triangle
+    if (std::fabs(det) < 1e-6) {
+        return false;
+    }
+
+    float inv_det = 1.0f / det;
+
+    // Calculate the vector from a_ to the ray origin
+    Vec s = ray.o - a_;
+
+    // Calculate u parameter and test bounds
+    float u = glm::dot(s, h) * inv_det;
+    if (u < 0.0f || u > 1.0f) {
+        return false;
+    }
+
+    // Calculate v parameter and test bounds
+    Vec q = glm::cross(s, edge1);
+    float v = glm::dot(ray.d, q) * inv_det;
+    if (v < 0.0f || u + v > 1.0f) {
+        return false;
+    }
+
+    // Calculate t to find the intersection point
+    float t = glm::dot(edge2, q) * inv_det;
+    if (t <= 0) {
+        return false; // No intersection (triangle is behind the ray)
+    }
+
+    // Compute the intersection point
+    Vec intersection = ray.o + t * ray.d;
+
+    // Fill the hit record
+    hit_record->distance = t;
+    hit_record->position = intersection;
+
+    if (phong_interpolation_) {
+        // Phong shading: Interpolate normals
+        hit_record->normal = glm::normalize((1 - u - v) * n_a_ + u * n_b_ + v * n_c_);
+    } else {
+        // Flat shading: Use the face normal
+        hit_record->normal = glm::normalize(glm::cross(edge1, edge2));
+    }
+
+    hit_record->in_direction = glm::normalize(ray.d);
+    hit_record->reflection = glm::normalize(ray.d - 2.0f * glm::dot(ray.d, hit_record->normal) * hit_record->normal);
+
     return true;
 }
 

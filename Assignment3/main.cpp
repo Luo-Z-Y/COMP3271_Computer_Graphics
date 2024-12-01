@@ -92,12 +92,45 @@ int main() {
 
 Vec SampleHemisphere(const Vec &normal) {
 
+    
     auto ray = Vec(0.0f, 0.0f, 0.0f);
     // TODO 3: add your code here.
     // This function randomly samples a direction on the hemisphere.
     // Hint: sample a random direction on the hemisphere with normal as the z-axis
     // Hint: Use Rodrigues' rotation formula to rotate the z-axis to the normal direction
-    return ray;
+     
+    // Step 1: Sample a random direction on the unit hemisphere with z-axis as the normal
+    float u1 = static_cast<float>(rand()) / RAND_MAX;  // Random value in [0, 1]
+    float u2 = static_cast<float>(rand()) / RAND_MAX;
+
+    // Convert random numbers to spherical coordinates
+    float theta = acos(u1);  // Angle from the z-axis
+    float phi = 2.0f * M_PI * u2; // Azimuth angle around the z-axis
+
+    // Convert spherical coordinates to Cartesian coordinates
+    float x = sin(theta) * cos(phi);
+    float y = sin(theta) * sin(phi);
+    float z = cos(theta);
+
+    Vec sample = Vec(x, y, z); // Sample direction in z-axis-aligned hemisphere
+
+    // Step 2: Rotate the sample to align with the given normal using Rodrigues' rotation formula
+    Vec zAxis(0.0f, 0.0f, 1.0f);
+    if (glm::length(normal - zAxis) < 1e-6) {
+        // If the normal is already the z-axis, no rotation is needed
+        return sample;
+    }
+    Vec rotationAxis = glm::cross(zAxis, normal);
+    float cosAngle = glm::dot(zAxis, normal) / (glm::length(zAxis) * glm::length(normal));
+    float angle = acos(cosAngle);
+
+    // Rodrigues' rotation formula
+    Vec rotatedSample =
+        sample * cos(angle) +
+        glm::cross(rotationAxis, sample) * sin(angle) +
+        rotationAxis * glm::dot(rotationAxis, sample) * (1 - cos(angle));
+
+    return glm::normalize(rotatedSample); // Ensure the result is a unit vector
 }
 
 Vec samplePhongLobe(const Vec &reflectionDir, double shininess) {
@@ -138,6 +171,13 @@ Color Shade(const Hittable &hittable_collection,
         // TODO 4: implement the diffuse reflection part of the shader.
         Vec wi = SampleHemisphere(hit_record.normal);
         // color += diffuseReflectance * BRDF * cos_theta / pdf;
+        float cos_theta = glm::dot(wi, hit_record.normal);
+        if (cos_theta > 0) { // Only consider directions above the surface
+          Vec diffuseColor = TraceRay(Ray(hit_record.position, wi), hittable_collection, trace_depth + 1);
+          float pdf = 1.f / (2 * M_PI); // Uniform sampling PDF for hemisphere
+          Vec brdf = material.diffuse / M_PI; // Lambertian BRDF
+          color += material.k_d * diffuseColor * brdf * cos_theta / pdf;
+        }
     }
     // 3. calculate specular
     if (material.k_s > 0.f && trace_depth < kMaxTraceDepth) {
